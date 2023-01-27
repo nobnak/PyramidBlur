@@ -1,51 +1,53 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering.PostProcessing;
 using UnityEngine.Rendering;
 
 namespace PyramidBlur {
 
     public class Blur : System.IDisposable {
 
+        public const string PASS = "Blur";
+
         // [down,up]
         protected Level[] m_Pyramid;
+        protected Material mat;
         protected CommandBuffer cmd;
-
-        protected PropertySheetFactory sheetFactory;
-        protected PropertySheet sheet;
 
         public Blur(Shader blur) {
             cmd = new CommandBuffer();
-            sheetFactory = new PropertySheetFactory();
-            sheet = sheetFactory.Get(blur);
+            mat = new Material(blur);
 
             m_Pyramid = new Level[k_MaxPyramidSize];
 
             for (int i = 0; i < k_MaxPyramidSize; i++) {
                 m_Pyramid[i] = new Level {
-                    down = Shader.PropertyToID("_BloomMipDown" + i),
-                    up = Shader.PropertyToID("_BloomMipUp" + i)
+                    down = Shader.PropertyToID($"_Blur_Down_{i}"),
+                    up = Shader.PropertyToID($"_Blur_Up_{i}"),
                 };
             }
         }
+        public Blur() : this(Resources.Load<Shader>(PASS)) { }
 
         #region IDisposable
         public void Dispose() {
-            if (sheetFactory != null) {
-                sheetFactory.Release();
-                sheet = null;
-                sheetFactory = null;
-            }
             if (cmd != null) {
                 cmd.Dispose();
                 cmd = null;
+            }
+            if (mat != null) {
+                (Application.isPlaying ? (System.Action<Object>)Object.Destroy : Object.DestroyImmediate)(mat);
+                mat = null;
             }
         }
         #endregion
 
         #region methods
         public void Render(Texture source, RenderTexture dest, Settings settings) {
+            var cmd = Write(source, dest, settings);
+            Graphics.ExecuteCommandBuffer(cmd);
+        }
+        public CommandBuffer Write(Texture source, RenderTexture dest, Settings settings) {
             cmd.Clear();
             cmd.BeginSample(Name);
 
@@ -60,21 +62,23 @@ namespace PyramidBlur {
             int logs_i = Mathf.FloorToInt(logs);
             int iterations = Mathf.Clamp(logs_i, 1, k_MaxPyramidSize);
             float sampleScale = 0.5f + logs - logs_i;
-            sheet.properties.SetFloat(ShaderIDs.SampleScale, sampleScale);
+            mat.SetFloat(ShaderIDs.SampleScale, sampleScale);
 
             int qualityOffset = settings.fastMode ? 1 : 0;
 
             // Downsample
             RenderTargetIdentifier lastDown = source;
-
+            var downPass = (int)Pass.Downsample13 + qualityOffset;
             for (int i = 0; i < iterations; i++) {
-                int mipDown = m_Pyramid[i].down;
-                int mipUp = m_Pyramid[i].up;
-                int pass = (int)Pass.Downsample13 + qualityOffset;
+                var mipDown = m_Pyramid[i].down;
+                var mipUp = m_Pyramid[i].up;
 
-                cmd.GetTemporaryRT(mipDown, tw, th, 0, FilterMode.Bilinear, source.graphicsFormat);
-                cmd.GetTemporaryRT(mipUp, tw, th, 0, FilterMode.Bilinear, source.graphicsFormat);
-                cmd.BlitFullscreenTriangle(lastDown, mipDown, sheet, pass);
+                var format = source.graphicsFormat;
+
+                cmd.GetTemporaryRT(mipDown, tw, th, 0, FilterMode.Bilinear, format);
+                cmd.GetTemporaryRT(mipUp, tw, th, 0, FilterMode.Bilinear, format);
+
+                cmd.Blit(lastDown, mipDown, mat, downPass);
 
                 lastDown = mipDown;
                 tw = tw / 2;
@@ -82,15 +86,14 @@ namespace PyramidBlur {
                 th = Mathf.Max(th / 2, 1);
             }
 
-            //cmd.Blit(lastDown, dest);
-
             // Upsample
-            int lastUp = m_Pyramid[iterations - 1].down;
+            RenderTargetIdentifier lastUp = m_Pyramid[iterations - 1].down;
+            var upPass = (int)Pass.UpsampleTent + qualityOffset;
             for (int i = iterations - 2; i >= 0; i--) {
-                int mipDown = m_Pyramid[i].down;
-                int mipUp = m_Pyramid[i].up;
-                cmd.SetGlobalTexture(ShaderIDs.BloomTex, mipDown);
-                cmd.BlitFullscreenTriangle(lastUp, mipUp, sheet, (int)Pass.UpsampleTent + qualityOffset);
+                var mipUp = m_Pyramid[i].up;
+
+                cmd.Blit(lastUp, mipUp, mat, upPass);
+
                 lastUp = mipUp;
             }
 
@@ -103,17 +106,16 @@ namespace PyramidBlur {
             }
 
             cmd.EndSample(Name);
-
-            Graphics.ExecuteCommandBuffer(cmd);
+            return cmd;
         }
         #endregion
 
-        #region declarations
+            #region declarations
         public const string Name = "BlurPyramid";
         public const int k_MaxPyramidSize = 16; // Just to make sure we handle 64k screens... Future-proof!
         public struct Level {
-            internal int down;
-            internal int up;
+            public int down;
+            public int up;
         }
         public enum Pass {
             Downsample13,

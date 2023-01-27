@@ -14,7 +14,7 @@ namespace PyramidBlur.Effects {
 
         #region unity
         private void OnEnable() {
-            blur = new Blur(links.blur);
+            blur = new Blur();
         }
         private void OnDisable() {
             if (blur != null) {
@@ -34,7 +34,6 @@ namespace PyramidBlur.Effects {
         #region declarations
         [System.Serializable]
         public class Links {
-            public Shader blur;
         }
         [System.Serializable]
         public class Tuner {
