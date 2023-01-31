@@ -26,7 +26,7 @@ float4 DownsampleBox13Tap(sampler2D tex, float2 uv, float2 texelSize)
     float4 L = tex2D(tex, uv + texelSize * float2( 0.0,  1.0));
     float4 M = tex2D(tex, uv + texelSize * float2( 1.0,  1.0));
 
-    half2 div = (1.0 / 4.0) * half2(0.5, 0.125);
+    float2 div = (1.0 / 4.0) * float2(0.5, 0.125);
 
     float4 o = (D + E + I + J) * div.x;
     o += (A + B + G + F) * div.y;
