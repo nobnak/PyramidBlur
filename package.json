@@ -5,7 +5,7 @@
 	},
 	"name": "jp.nobnak.pyramid_blur",
 	"displayName": "PyramidBlur",
-	"version": "1.0.0",
+	"version": "1.0.1",
 
 	"dependencies": {
 		"com.unity.mathematics": "1.2.6",
