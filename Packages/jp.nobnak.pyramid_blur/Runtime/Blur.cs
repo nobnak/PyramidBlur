@@ -5,9 +5,11 @@ using UnityEngine.Rendering;
 
 namespace PyramidBlur {
 
+    //based on
+    // https://github.com/Unity-Technologies/FPSSample/blob/6b8b27aca3690de9e46ca3fe5780af4f0eff5faa/Packages/com.unity.postprocessing/PostProcessing/Shaders/Builtins/Bloom.shader
     public class Blur : System.IDisposable {
 
-        public const string PASS = "Blur";
+        public const string SHADER_Blur = "Blur";
 
         // [down,up]
         protected Level[] m_Pyramid;
@@ -15,7 +17,7 @@ namespace PyramidBlur {
         protected CommandBuffer cmd;
 
         public Blur(Shader blur) {
-            cmd = new CommandBuffer();
+            cmd = new CommandBuffer() { name =  SHADER_Blur };
             mat = new Material(blur);
 
             m_Pyramid = new Level[k_MaxPyramidSize];
@@ -27,7 +29,7 @@ namespace PyramidBlur {
                 };
             }
         }
-        public Blur() : this(Resources.Load<Shader>(PASS)) { }
+        public Blur() : this(Resources.Load<Shader>(SHADER_Blur)) { }
 
         #region IDisposable
         public void Dispose() {
